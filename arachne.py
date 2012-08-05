@@ -12,7 +12,12 @@ def populatebase(lb):
   lb.link(a,b)
   lb.link(a,c)
 
-
+class LexDB (QtCore.QObject):
+  updated_node = QtCore.Signal(int)
+  def __init__(self, parent=None):
+	super(LexDB,self).__init__(parent)
+	self.lb = Lexiabase()
+	
 def main():
   app = QtGui.QApplication([])
   global lbase
