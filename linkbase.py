@@ -1,14 +1,24 @@
 import networkx
 from random import randrange
+import sqlite3
 
 class Linkbase (object):
   def __init__(self, objctor):
       """initializes linkbase; takes an object constructor as a parameter
       for the instantiation of nodes."""
-      self.store = networkx.digraph.DiGraph()
-      self.index = {}
+      self.initialize_stores()
       self.ctor = objctor
       self.counter = 0
+
+  def initialize_stores(self):
+	self.store = networkx.digraph.DiGraph()
+	self.index = {}
+  def init_sqlite_backend(self,f):
+	self.db = sqlite3.connect(f)
+	self.db.execute("""create table lexias (nodeid integer primary key,
+	                   contents text)""")
+	self.db.execute("""create table links (lfrom integer, lto integer,
+	                   ltype integer)""")
       
   def __getitem__(self, x):
     """implement index notation for the linkbase object; given a nodeid @x,
@@ -22,10 +32,14 @@ class Linkbase (object):
   def new_node(self, contents=u''):
     """add a new node to the linkbase with the given contents."""
     n = self.counter
-    b = self.ctor(contents, self, n)
-    self[n] = b
+	self._create_node(n, contents)
     self.counter+=1
     return n
+
+  def _create_node(self, nid, contents):
+	b = self.ctor(contents, self, nid)
+	self[nid] = b
+	return nid
 
   def link(self, lid1, lid2, linktype=0):
     """link two nodes with the given linktype"""
@@ -84,7 +98,34 @@ class Linkbase (object):
   def node_iter(self):
       """return an iterator of all nodes"""
       return self.index.iteritems()
-      
+
+  def save_sqlite(self,filename):
+	self.init_sqlite_backend(filename)
+	self.db.executemany("""insert into lexias values (?,?)""",
+					 [(i.nodeid, i.contents) for i in self.index.values()])
+	edges = []
+	for i in self.store.adjancency_iter():
+	  for j in i[1].keys():
+		edges.append(i[0], j, i[1][j])
+	self.db.executemany("""insert into links values (?,?,?)""",
+					 edges)
+	self.db.close()
+
+  def load_sqlite(self, filename):
+	"""warning: this clears the current working set and loads"""
+	self.db = sqlite3.connect(filename)
+	self.initialize_stores()
+	c = self.db.execute("""select * from lexias""")
+	bign = 0
+	for (nid, txt) in c:
+	  self._create_node(nid,txt)
+	  if nid > bign:
+		bign = nid+1
+	self.counter = bign
+	c = self.db.execute("""select * from links""")
+	for (lfrom,lto,ltype) in c:
+	  self.link(lfrom,lto,ltype)
+	self.db.close()
       
 
 class LinkNode(object):
